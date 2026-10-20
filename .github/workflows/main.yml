@@ -1,5 +1,6 @@
 name: CI devops 2025
 
+# 触发条件：main 和 develop 分支 push 时运行，任何 PR 也运行
 on:
   push:
     branches:
@@ -8,35 +9,60 @@ on:
   pull_request:
 
 jobs:
-
+  # ============================================================
+  # Job 1: 构建并测试后端 + SonarCloud 代码质量分析
+  # ============================================================
   test-backend:
     runs-on: ubuntu-24.04
 
     steps:
+      # 1. 检出仓库代码
       - name: Checkout code
         uses: actions/checkout@v4
+        # SonarCloud 需要完整的 git 历史来做 blame 和增量分析
+        with:
+          fetch-depth: 0
 
+      # 2. 安装 JDK 21
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Build and test with Maven
-        run: mvn clean verify --file ./simple-api/pom.xml
+      # 3. 用 Maven 构建并跑测试，同时执行 SonarCloud 分析
+      #    - sonar.projectKey / sonar.organization 来自 SonarCloud 项目配置
+      #    - sonar.login 使用 GitHub Secrets 中的 SONAR_TOKEN，避免明文泄露
+      - name: Build, test and analyze with SonarCloud
+        run: >
+          mvn -B verify sonar:sonar
+          -Dsonar.projectKey=liuyao0010-debug_tp-devops-correction-docker
+          -Dsonar.organization=liuyao0010-debug
+          -Dsonar.host.url=https://sonarcloud.io
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+          --file ./simple-api/pom.xml
 
+  # ============================================================
+  # Job 2: 构建并推送 Docker 镜像到 Docker Hub
+  # ============================================================
   build-and-push-docker-image:
+    # 关键：只有 test-backend 成功后才执行本 job
+    # 避免测试失败还去构建注定失败的镜像
     needs: test-backend
 
     runs-on: ubuntu-24.04
 
     steps:
+      # 1. 检出代码
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2. 登录 Docker Hub
+      #    使用 GitHub Secrets 中的凭据，避免明文泄露
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
 
+      # 3. 构建并推送 backend 镜像（simple-api）
       - name: Build image and push backend
         uses: docker/build-push-action@v6
         with:
@@ -44,6 +70,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-simple-api:latest
           push: ${{ github.ref == 'refs/heads/main' }}
 
+      # 4. 构建并推送 database 镜像
       - name: Build image and push database
         uses: docker/build-push-action@v6
         with:
@@ -51,6 +78,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-database:latest
           push: ${{ github.ref == 'refs/heads/main' }}
 
+      # 5. 构建并推送 http-server 镜像
       - name: Build image and push http-server
         uses: docker/build-push-action@v6
         with:
