@@ -112,11 +112,11 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- 显式声明 Sonar Maven 插件，解决 CI 中 "No plugin found for prefix 'sonar'" 的问题 -->
+			<!-- 显式声明 Sonar Maven 插件，降级为兼容性更好的版本 -->
 			<plugin>
 				<groupId>org.sonarsource.scanner.maven</groupId>
 				<artifactId>sonar-maven-plugin</artifactId>
-				<version>5.0.0.4389</version>
+				<version>3.9.1.2184</version>
 			</plugin>
 		</plugins>
 	</build>
