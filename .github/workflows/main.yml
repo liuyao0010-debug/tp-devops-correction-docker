@@ -1,6 +1,6 @@
 name: CI devops 2025
 
-# 触发条件：main 和 develop 分支 push 时运行，任何 PR 也运行
+# Conditions de déclenchement : sur un push vers les branches main et develop, ou sur une pull request
 on:
   push:
     branches:
@@ -10,39 +10,30 @@ on:
 
 jobs:
   # ============================================================
-  # Job 1: 构建并测试后端 + SonarCloud 代码质量分析
+  # Job 1 : Compilation, tests backend et analyse de la qualité du code avec SonarCloud
   # ============================================================
   test-backend:
     runs-on: ubuntu-24.04
 
     steps:
-      # 1. 检出仓库代码
+      # 1. Récupération du code source depuis le dépôt GitHub
       - name: Checkout code
         uses: actions/checkout@v4
-        # SonarCloud 需要完整的 git 历史来做 blame 和增量分析
         with:
+          # SonarCloud a besoin de l'historique Git complet pour ses analyses (blame, etc.)
           fetch-depth: 0
 
-      # 2. 安装 JDK 21
+      # 2. Installation de la version 21 du JDK
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      # --- 探针步骤：检查 Token 是否成功传入 ---
-      - name: Check SONAR_TOKEN presence
-        run: |
-          if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
-            echo "ERROR: SONAR_TOKEN is empty! Secret not configured properly."
-            exit 1
-          else
-            echo "SUCCESS: SONAR_TOKEN is present."
-          fi
-
-      # 3. 用 Maven 构建并跑测试，同时执行 SonarCloud 分析
+      # 3. Compilation, exécution des tests et analyse SonarCloud
+      #    - sonar.projectKey et sonar.organization permettent de cibler le bon projet
+      #    - sonar.token est lu de manière sécurisée depuis les GitHub Secrets
       - name: Build, test and analyze with SonarCloud
-        # 使用 env 传参，避免长命令拼接出错
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
@@ -54,32 +45,34 @@ jobs:
           --file ./simple-api/pom.xml
 
   # ============================================================
-  # Job 2: 构建并推送 Docker 镜像到 Docker Hub
+  # Job 2 : Construction et publication des images Docker sur Docker Hub
   # ============================================================
   build-and-push-docker-image:
-    # 关键：只有 test-backend 成功后才执行本 job
+    # Dépendance : ce job ne s'exécute que si le job 'test-backend' réussit
     needs: test-backend
 
     runs-on: ubuntu-24.04
 
     steps:
-      # 1. 检出代码
+      # 1. Récupération du code source
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. 登录 Docker Hub
+      # 2. Authentification sur Docker Hub
+      #    Utilisation des identifiants stockés dans les GitHub Secrets pour éviter tout mot de passe en clair
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
 
-      # 3. 构建并推送 backend 镜像（simple-api）
+      # 3. Construction et push de l'image backend (simple-api)
       - name: Build image and push backend
         uses: docker/build-push-action@v6
         with:
           context: ./simple-api
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-simple-api:latest
+          # Ne push l'image que si on est sur la branche main
           push: ${{ github.ref == 'refs/heads/main' }}
 
-      # 4. 构建并推送 database 镜像
+      # 4. Construction et push de l'image de la base de données
       - name: Build image and push database
         uses: docker/build-push-action@v6
         with:
@@ -87,7 +80,7 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/tp-devops-database:latest
           push: ${{ github.ref == 'refs/heads/main' }}
 
-      # 5. 构建并推送 http-server 镜像
+      # 5. Construction et push de l'image du serveur HTTP (http-server)
       - name: Build image and push http-server
         uses: docker/build-push-action@v6
         with:
