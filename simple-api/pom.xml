@@ -114,10 +114,10 @@
 			</plugin>
 			<!-- 显式声明 Sonar Maven 插件，降级为兼容性更好的版本 -->
 			<plugin>
-				<groupId>org.sonarsource.scanner.maven</groupId>
-				<artifactId>sonar-maven-plugin</artifactId>
-				<version>3.9.1.2184</version>
-			</plugin>
+    <groupId>org.sonarsource.scanner.maven</groupId>
+    <artifactId>sonar-maven-plugin</artifactId>
+    <version>5.1.0.4751</version> <!-- 升级到兼容 SLF4J 2.x 的新版本 -->
+</plugin>
 		</plugins>
 	</build>
 
