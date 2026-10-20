@@ -30,16 +30,27 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # --- 探针步骤：检查 Token 是否成功传入 ---
+      - name: Check SONAR_TOKEN presence
+        run: |
+          if [ -z "${{ secrets.SONAR_TOKEN }}" ]; then
+            echo "ERROR: SONAR_TOKEN is empty! Secret not configured properly."
+            exit 1
+          else
+            echo "SUCCESS: SONAR_TOKEN is present."
+          fi
+
       # 3. 用 Maven 构建并跑测试，同时执行 SonarCloud 分析
-      #    - sonar.projectKey / sonar.organization 来自 SonarCloud 项目配置
-      #    - sonar.login 使用 GitHub Secrets 中的 SONAR_TOKEN，避免明文泄露
       - name: Build, test and analyze with SonarCloud
+        # 使用 env 传参，避免长命令拼接出错
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
           mvn -B verify sonar:sonar
           -Dsonar.projectKey=liuyao0010-debug_tp-devops-correction-docker
           -Dsonar.organization=liuyao0010-debug
           -Dsonar.host.url=https://sonarcloud.io
-          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+          -Dsonar.token=${SONAR_TOKEN}
           --file ./simple-api/pom.xml
 
   # ============================================================
@@ -47,7 +58,6 @@ jobs:
   # ============================================================
   build-and-push-docker-image:
     # 关键：只有 test-backend 成功后才执行本 job
-    # 避免测试失败还去构建注定失败的镜像
     needs: test-backend
 
     runs-on: ubuntu-24.04
@@ -58,7 +68,6 @@ jobs:
         uses: actions/checkout@v4
 
       # 2. 登录 Docker Hub
-      #    使用 GitHub Secrets 中的凭据，避免明文泄露
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
 
